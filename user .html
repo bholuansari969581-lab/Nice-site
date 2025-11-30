@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Fresh Morning News – Latest Updates</title>
+  <style>
+    *{box-sizing:border-box;font-family:Arial,Helvetica,sans-serif}
+    body{margin:0;background:linear-gradient(135deg,#f093fb 0%, #f5576c 100%);color:#222;min-height:100vh}
+    nav{background:#111;padding:12px;color:#fff;display:flex;gap:8px;align-items:center;justify-content:space-between}
+    nav .brand{font-weight:800;color:#ffd6e0}
+    nav .links{display:flex;gap:12px}
+    nav a{color:#fff;text-decoration:none;font-weight:600}
+    .wrap{max-width:1100px;margin:18px auto;padding:12px}
+    #search{width:100%;padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.3);font-size:15px;margin-bottom:12px}
+    #filter{padding:10px;border-radius:8px;border:1px solid rgba(255,255,255,.3);margin-bottom:14px}
+    .news-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px}
+    .card{background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,.12);cursor:pointer;transition:transform .18s}
+    .card:hover{transform:translateY(-6px)}
+    .card img{width:100%;height:180px;object-fit:cover}
+    .card .body{padding:12px}
+    .card h3{margin:0;color:#d63384;font-size:18px}
+    .card p{margin:8px 0;color:#555}
+    .meta{font-size:13px;color:#888}
+    #detail{display:none;background:#fff;padding:16px;border-radius:10px;box-shadow:0 10px 40px rgba(0,0,0,.12);margin-top:18px}
+    #detail img{width:100%;max-height:420px;object-fit:cover;border-radius:6px}
+    #detail h2{color:#d63384}
+    @media(max-width:650px){.news-grid{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="brand">Fresh Morning News</div>
+    <div class="links">
+      <a href="#" id="homeLink">Home</a>
+      <a href="#" id="categoriesLink">Categories</a>
+      <a href="#" id="searchLink">Search</a>
+    </div>
+  </nav>
+
+  <div class="wrap">
+    <input id="search" placeholder="Search by title..." />
+    <select id="filter">
+      <option value="">All Categories</option>
+      <option value="India">India</option>
+      <option value="World">World</option>
+      <option value="Sports">Sports</option>
+      <option value="Tech">Tech</option>
+      <option value="Local">Local</option>
+      <option value="Entertainment">Entertainment</option>
+    </select>
+
+    <div class="news-grid" id="newsGrid"></div>
+
+    <div id="detail"></div>
+  </div>
+
+  <!-- Firebase CDN -->
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-storage-compat.js"></script>
+
+  <script>
+    // ←— SAME FIREBASE CONFIG (your project)
+    const firebaseConfig = {
+      apiKey: "AIzaSyA0mlePdyAhRzhYwWXSlNiCVT25-Jbt4X0",
+      authDomain: "fir-51980.firebaseapp.com",
+      databaseURL: "https://fir-51980-default-rtdb.firebaseio.com",
+      projectId: "fir-51980",
+      storageBucket: "fir-51980.firebasestorage.app",
+      messagingSenderId: "239509734864",
+      appId: "1:239509734864:web:583a1c32d77652994825d5"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const storage = firebase.storage();
+
+    const newsGrid = document.getElementById('newsGrid');
+    const detail = document.getElementById('detail');
+    const search = document.getElementById('search');
+    const filter = document.getElementById('filter');
+    let allNews = [];
+
+    // fetch and subscribe
+    db.ref('news').orderByChild('createdAt').on('value', snapshot => {
+      const arr = [];
+      snapshot.forEach(child => arr.push({ id: child.key, ...child.val() }));
+      // newest first
+      arr.sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
+      allNews = arr;
+      renderNews(allNews);
+    });
+
+    function renderNews(list){
+      newsGrid.innerHTML = '';
+      if(!list.length){ newsGrid.innerHTML = '<div style="color:#fff;font-weight:700">No news yet.</div>'; return; }
+      list.forEach(item => {
+        const el = document.createElement('div');
+        el.className = 'card';
+        el.innerHTML = `
+          <img src="${item.imageUrl || 'https://via.placeholder.com/800x450?text=No+Image'}" alt="${escapeHtml(item.title)}" />
+          <div class="body">
+            <h3>${escapeHtml(item.title)}</h3>
+            <p>${escapeHtml(item.shortDesc || '')}</p>
+            <div class="meta">${item.category || ''} | ${item.date || ''}</div>
+          </div>
+        `;
+        el.addEventListener('click', ()=> showDetail(item));
+        newsGrid.appendChild(el);
+      });
+    }
+
+    function showDetail(item){
+      detail.style.display = 'block';
+      detail.innerHTML = `
+        <img src="${item.imageUrl || 'https://via.placeholder.com/1200x700?text=No+Image'}" alt="${escapeHtml(item.title)}" />
+        <h2>${escapeHtml(item.title)}</h2>
+        <div class="meta">${item.category || ''} | ${item.date || ''}</div>
+        <p style="margin-top:12px;line-height:1.6;color:#333">${nl2br(escapeHtml(item.fullContent || ''))}</p>
+      `;
+      window.scrollTo({ top: detail.offsetTop - 10, behavior: 'smooth' });
+    }
+
+    // Search & Filter
+    search.addEventListener('input', applyFilters);
+    filter.addEventListener('change', applyFilters);
+
+    function applyFilters(){
+      const q = search.value.trim().toLowerCase();
+      const cat = filter.value;
+      const filtered = allNews.filter(n => {
+        const okQ = !q || (n.title && n.title.toLowerCase().includes(q));
+        const okC = !cat || n.category === cat;
+        return okQ && okC;
+      });
+      renderNews(filtered);
+    }
+
+    // nav behavior
+    document.getElementById('homeLink').addEventListener('click', (e)=>{e.preventDefault(); detail.style.display='none'; renderNews(allNews);});
+    document.getElementById('categoriesLink').addEventListener('click',(e)=>{e.preventDefault(); filter.focus();});
+    document.getElementById('searchLink').addEventListener('click',(e)=>{e.preventDefault(); search.focus();});
+
+    // helpers
+    function escapeHtml(s){ if(!s) return ''; return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;'); }
+    function nl2br(s){ return s.replace(/\n/g,'<br/>'); }
+  </script>
+</body>
+</html>
